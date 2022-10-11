@@ -238,11 +238,11 @@ def BLS_Train(train,target):
 
 def BLS_Test(IMG,width,height):
     #===============train划分出x
-    WeightTop_Best = np.load("/home/huangjh/Project/DeRain/JackData/TrainLog/backup/WeightTop_Best.npy")
-    WeightEnhan_Best = np.load("/home/huangjh/Project/DeRain/JackData/TrainLog/backup/WeightEnhan_Best.npy")
-    WFSparse_Best = np.load("/home/huangjh/Project/DeRain/JackData/TrainLog/backup/WFSparse_Best.npy")
-    meanOfEachWindow_Best = np.load("/home/huangjh/Project/DeRain/JackData/TrainLog/backup/meanOfEachWindow_Best.npy")
-    distOfMaxAndMin_Best = np.load("/home/huangjh/Project/DeRain/JackData/TrainLog/backup/distOfMaxAndMin_Best.npy")
+    WeightTop_Best = np.load("/home/huangjiehui/Project/DerainNet/JackCode/Derain/para/WeightTop_Best.npy")
+    WeightEnhan_Best = np.load("/home/huangjiehui/Project/DerainNet/JackCode/Derain/para/WeightEnhan_Best.npy")
+    WFSparse_Best = np.load("/home/huangjiehui/Project/DerainNet/JackCode/Derain/para/WFSparse_Best.npy")
+    meanOfEachWindow_Best = np.load("/home/huangjiehui/Project/DerainNet/JackCode/Derain/para/meanOfEachWindow_Best.npy")
+    distOfMaxAndMin_Best = np.load("/home/huangjiehui/Project/DerainNet/JackCode/Derain/para/distOfMaxAndMin_Best.npy")
     # input = IMG.flatten() # 对输入的图像数据进行展平
     test_x = IMG.T # 整个train(输入的有雨图像)作为test_x，用来获得整个图像的映射
     #==========================================借鉴BLS=============================

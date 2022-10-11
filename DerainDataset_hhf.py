@@ -1,13 +1,19 @@
 import os
 import os.path
+import threading
+# import random
 import numpy as np
-import random
+
+np.random.seed(0)
 import h5py # (5)pip install h5py
 import torch
 import cv2 # (6)pip install opencv-python -i https://pypi.tuna.tsinghua.edu.cn/simple
 import glob,re
 import torch.utils.data as udata
 from utils import *
+from tqdm import *
+from patchify import patchify
+import lmdb,pickle
 # import pexpect
 #　pexpect.spawn('sudo [cmd]').sendline("[YAMTF1107]") # 解决调试时，权限不足的问题 BUG 应该用 sudo chmod 777 /home/jack/Data/RainData 解决
 
@@ -16,7 +22,7 @@ def Im2Patch(img, win, stride=1):
     endc = img.shape[0] # endc 3
     endw = img.shape[1] # endw 512
     endh = img.shape[2] # endh 384
-    patch = img[:, 0:endw - win + 0 + 1:stride, 0:endh - win + 0 + 1:stride] # [:,0:413:100,0:285:100]
+    patch = img[:, 0:endw - win + 0 + 1:stride, 0:endh - win + 0 + 1:stride] # [:,0:413:100,0:285:100]   (3,2,3)
     TotalPatNum = patch.shape[1] * patch.shape[2] # 5 * 3
     Y = np.zeros([endc, win * win, TotalPatNum], np.float32) # Y为(3,10000,15)
 
@@ -286,75 +292,7 @@ def prepare_data_X2Data_2(data_path, patch_size, stride,datasetname):
         target = cv2.imread(os.path.join(target_path,target_file))
         bt, gt, rt = cv2.split(target)
         target = cv2.merge([rt, gt, bt])
-
         for j in range(3): # 增加数据的多样性
-            for name in os.listdir(input_path):
-                if re.match(r"%04d"% (i + 1), name):
-                    break
-            input_file = name
-            input_img = cv2.imread(os.path.join(input_path,input_file))
-            bi, gi, ri = cv2.split(input_img)
-            if j == 0:
-                #==========融合================ # 2022.09.03
-                input_img = cv2.merge([ri, gi, bi])
-                target_img = target      
-            if j == 1:
-                input_img = cv2.merge([ri, gi, bi])
-                target_img = target                
-            if j == 2:
-                input_img = cv2.merge([ri, gi, bi])
-                target_img = target    
-                target_img = cv2.flip(target_img, 1)
-                input_img = cv2.flip(input_img, 1)
-
-            target_img = np.float32(normalize(target_img))
-            target_patches = Im2Patch(target_img.transpose(2,0,1), win=patch_size, stride=stride)
-
-            input_img = np.float32(normalize(input_img))
-            input_patches = Im2Patch(input_img.transpose(2, 0, 1), win=patch_size, stride=stride)
-
-            print("target file: %s # samples: %d" % (input_file, target_patches.shape[3]))
-            for n in range(target_patches.shape[3]):
-                target_data = target_patches[:, :, :, n].copy()
-                target_h5f.create_dataset(str(train_num), data=target_data)
-
-                input_data = input_patches[:, :, :, n].copy()
-                input_h5f.create_dataset(str(train_num), data=input_data)
-
-                train_num += 1
-
-    target_h5f.close()
-    input_h5f.close()
-
-    print('training set, # samples %d\n' % train_num)
-
-
-def prepare_Ihaze_Data(data_path, patch_size, stride):
-    # train
-    print('process training data')
-    input_path = os.path.join(data_path)
-    target_path = os.path.join(data_path)
-
-    save_target_path = os.path.join(data_path, 'train_target_{}.h5'.format(datasetname))
-    save_input_path = os.path.join(data_path, 'train_input_{}.h5'.format(datasetname))
-
-    target_h5f = h5py.File(save_target_path, 'w')
-    input_h5f = h5py.File(save_input_path, 'w')
-
-    train_num = 0
-
-    input_path = os.path.join(data_path, 'rain/') # \\ 等同于 / Jack 4.7 Great!
-    target_path = os.path.join(data_path, 'norain/')
-    for i in range(1900):
-        target_file = "norain-%d.png" % (i + 1)
-        target = cv2.imread(os.path.join(target_path,target_file))
-        bt, gt, rt = cv2.split(target)
-        target = cv2.merge([rt, gt, bt])
-
-        for j in range(3): # 增加数据的多样性
-            input_file = "norain-%dx2.png" % (i + 1)
-            input_img = cv2.imread(os.path.join(input_path,input_file))
-            bi, gi, ri = cv2.split(input_img)
             if j == 0: # 融合 初步无雨 RGB
                 #==========堆叠Input为指定格式
                 train_ZeroData = np.zeros((input_img.shape[0],input_img.shape[1])).flatten() 
@@ -407,24 +345,314 @@ def prepare_Ihaze_Data(data_path, patch_size, stride):
 
     print('training set, # samples %d\n' % train_num)
 
+
+def prepare_Ihaze_Data(data_path, patch_size, stride,datasetname):
+    # train
+    print('process training data')
+    input_path = os.path.join(data_path)
+    target_path = os.path.join(data_path)
+
+    save_target_path = os.path.join(data_path, 'train_target_{}.h5'.format(datasetname))
+    save_input_path = os.path.join(data_path, 'train_input_{}.h5'.format(datasetname))
+
+    target_h5f = h5py.File(save_target_path, 'w')
+    input_h5f = h5py.File(save_input_path, 'w')
+
+    train_num = 0
+
+    input_path = os.path.join(data_path, 'hazy/') # \\ 等同于 / Jack 4.7 Great!
+    target_path = os.path.join(data_path, 'GT/')
+    for i in range(100):
+
+        if datasetname == 'I-HAZE':
+                target_file = "%02d_indoor_GT.jpg" % (i + 1)
+        else :
+                target_file = "%02d_outdoor_GT.jpg" % (i + 1)
+        if not os.path.exists(os.path.join(target_path,target_file)):
+            print(os.path.join(target_path,target_file))
+            continue
+        target = cv2.imread(os.path.join(target_path,target_file))
+        bt, gt, rt = cv2.split(target)
+        target = cv2.merge([rt, gt, bt])
+
+        for j in range(3): # 增加数据的多样性
+            if datasetname == 'I-HAZE':
+                input_file = "%02d_indoor_hazy.jpg" % (i + 1)
+            else :
+                input_file = "%02d_outdoor_hazy.jpg" % (i + 1)
+            input_img = cv2.imread(os.path.join(input_path,input_file))
+            bi, gi, ri = cv2.split(input_img)
+            if j == 0: # 融合 初步无雨 RGB
+                #==========堆叠Input为指定格式
+                train_ZeroData = np.zeros((input_img.shape[0],input_img.shape[1])).flatten() 
+                bi, gi, ri = cv2.split(input_img)
+                train_ZeroData = np.vstack((train_ZeroData,ri.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,gi.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,bi.flatten()))
+                #==========BLS预处理数据================= # 2022.09.03
+                BLS_ri=BLS_Test(IMG=train_ZeroData[1:,:],width=input_img.shape[0],height=input_img.shape[1]) # 对有雨图像进行预处理，获得 R 通道背景
+                #==========融合================ # 2022.09+.03
+                input_img = cv2.merge([BLS_ri, gi, bi])
+                target_img = target      
+            if j == 1: # 融合 初步无雨 IGB
+                #==========堆叠Input为指定格式
+                train_ZeroData = np.zeros((input_img.shape[0],input_img.shape[1])).flatten() 
+                input_img_HSI = cv2.cvtColor(target_img,cv2.COLOR_BGR2HSV)
+                hi, si, Ii = cv2.split(input_img_HSI)
+                train_ZeroData = np.vstack((train_ZeroData,hi.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,si.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,Ii.flatten()))
+                #==========BLS预处理数据================= # 2022.09.03
+                BLS_Ii=BLS_Test(IMG=train_ZeroData[1:,:],width=input_img.shape[0],height=input_img.shape[1]) # 对有雨图像进行预处理，获得 R 通道背景
+                #==========融合================ # 2022.09+.03
+                input_img = cv2.merge([BLS_Ii, gi, bi])
+                target_img = target                
+            if j == 2: # 融合 原图有雨 RGB
+                input_img = cv2.merge([ri, gi, bi])
+                target_img = target    
+                target_img = cv2.flip(target_img, 1)
+                input_img = cv2.flip(input_img, 1)
+
+            target_img = np.float32(normalize(target_img))
+            target_patches = Im2Patch(target_img.transpose(2,0,1), win=patch_size, stride=stride)
+
+            input_img = np.float32(normalize(input_img))
+            input_patches = Im2Patch(input_img.transpose(2, 0, 1), win=patch_size, stride=stride)
+
+            print("target file: %s # samples: %d" % (input_file, target_patches.shape[3]))
+            for n in range(target_patches.shape[3]):
+                target_data = target_patches[:, :, :, n].copy()
+                target_h5f.create_dataset(str(train_num), data=target_data)
+
+                input_data = input_patches[:, :, :, n].copy()
+                input_h5f.create_dataset(str(train_num), data=input_data)
+
+                train_num += 1
+
+    target_h5f.close()
+    input_h5f.close()
+
+    print('training set, # samples %d\n' % train_num)
+    
+    
+def prepare_ITS_Data(patch, 
+                    patch_size=192, 
+                    stride=132
+                    ):
+    # train
+    print('process training data')
+    datasetname = 'ITS'
+    data_path = '/home/huangjiehui/Project/DerainNet/JackData/ITS/train'
+    input_path = os.path.join(data_path,'ITS_haze')
+    target_path = os.path.join(data_path,'ITS_clear')
+    # save_target_path = os.path.join(data_path, 'train_target_{}.h5'.format(datasetname))
+    # save_input_path = os.path.join(data_path, 'train_input_{}.h5'.format(datasetname))
+    
+    save_target_path = lmdb.open(os.path.join(data_path, 'train_target_{}.h5'.format(datasetname)),map_size=int(1e11))
+    save_input_path = lmdb.open(os.path.join(data_path, 'train_input_{}.h5'.format(datasetname)),map_size=int(1e11))
+    txn_target = save_target_path.begin(write=True)
+    txn_input = save_input_path.begin(write=True)
+
+
+    # save_target_path = os.path.join(data_path, 'train_target_{}.h5'.format(datasetname))
+    # # save_input_path = os.path.join(data_path, 'train_input_{}.h5'.format(datasetname))
+    # target_h5f = h5py.File(save_target_path, 'w')
+    # input_h5f = h5py.File(save_input_path, 'w')
+    train_num = 22392
+    ls = os.listdir(input_path)
+    np.random.shuffle(ls)
+    for input_file in tqdm(ls[2551:10000],desc=f'正在保存:{patch}'):
+        target_file = input_file.split('_')[0] + '.png'
+        target = cv2.imread(os.path.join(target_path,target_file))
+        bt, gt, rt = cv2.split(target)
+        target = cv2.merge([rt, gt, bt])
+
+        for j in range(3): # 增加数据的多样性
+            input_img = cv2.imread(os.path.join(input_path,input_file))
+            bi, gi, ri = cv2.split(input_img)
+            if j == 0: # 融合 初步无雨 RGB
+                input_img = cv2.merge([ri, gi, bi])
+                target_img = target    
+                target_img = cv2.flip(target_img, 1)
+                input_img = cv2.flip(input_img, 1)
+                
+            if j == 1: # 融合 初步无雨 IGB
+                #==========堆叠Input为指定格式
+                train_ZeroData = np.zeros((input_img.shape[0],input_img.shape[1])).flatten() 
+                input_img_HSI = cv2.cvtColor(target_img,cv2.COLOR_BGR2HSV)
+                hi, si, Ii = cv2.split(input_img_HSI)
+                train_ZeroData = np.vstack((train_ZeroData,hi.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,si.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,Ii.flatten()))
+                #==========BLS预处理数据================= # 2022.09.03
+                BLS_Ii=BLS_Test(IMG=train_ZeroData[1:,:],width=input_img.shape[0],height=input_img.shape[1]) # 对有雨图像进行预处理，获得 R 通道背景
+                #==========融合================ # 2022.09+.03
+                input_img = cv2.merge([BLS_Ii, gi, bi])
+                target_img = target                
+            if j == 2: # 融合 原图有雨 RGB
+                #==========堆叠Input为指定格式
+                train_ZeroData = np.zeros((input_img.shape[0],input_img.shape[1])).flatten() 
+                bi, gi, ri = cv2.split(input_img)
+                train_ZeroData = np.vstack((train_ZeroData,ri.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,gi.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,bi.flatten()))
+                #==========BLS预处理数据================= # 2022.09.03
+                BLS_ri=BLS_Test(IMG=train_ZeroData[1:,:],width=input_img.shape[0],height=input_img.shape[1]) # 对有雨图像进行预处理，获得 R 通道背景
+                #==========融合================ # 2022.09+.03
+                input_img = cv2.merge([BLS_ri, gi, bi])
+                target_img = target      
+
+            target_img = np.float32(normalize(target_img))
+            # target_patches = Im2Patch(target_img.transpose(2,0,1), win=patch_size, stride=stride)
+            target_patches= patchify(target_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
+            input_img = np.float32(normalize(input_img))
+            # input_patches = Im2Patch(input_img.transpose(2, 0, 1), win=patch_size, stride=stride)
+            input_patches= patchify(input_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
+            for n in range(target_patches.shape[0]):
+                if target_file in set_target:
+                    # target_h5f.create_dataset(str(train_num), data=set_target[target_file])
+                    txn_target.put(str(train_num).encode(),set_target[target_file].encode())
+                    # save_target. 
+                else:
+                    target_data = target_patches[n,:, :, :].copy()
+                    txn_target.put(str(train_num).encode(), pickle.dumps(target_data))
+                input_data = input_patches[n,:, :, :].copy()
+                txn_input.put(str(train_num).encode(), pickle.dumps(input_data))
+                train_num += 1
+            set_target[target_file] = str(train_num)
+        print("target file: %s # samples: %d" % (input_file, target_patches.shape[0]))
+        txn_input.commit()
+        txn_target.commit()
+        txn_target = save_target_path.begin(write=True)
+        txn_input = save_input_path.begin(write=True)
+
+    save_target_path.close()
+    save_input_path.close()
+            # save_target_path = lmdb.open('train_target_{}'.format(datasetname),map_size=int(1e9))
+            # save_input_path = lmdb.open('train_input_{}'.format(datasetname),map_size=int(1e9))
+            # txn_target = save_target_path.begin(write=True)
+            # txn_input = save_input_path.begin(write=True)
+
+        
+
+
+    print('training set, # samples %d\n' % train_num)
+    
+def prepare_OTS_Data(patch, 
+                    patch_size=192, 
+                    stride=132
+                    ):
+    # train
+    print('process training data')
+    # save_target_path = lmdb.open('train_input_{}'.format(datasetname),map_size=int(1e9))
+    # save_input_path = lmdb.open('test_input_{}'.format(datasetname),map_size=int(1e9))
+    datasetname = 'OTS'
+    data_path = '/home/huangjiehui/Project/DerainNet/JackData/OTS'
+    input_path = os.path.join(data_path,'haze')
+    target_path = os.path.join(data_path,'clear_images')
+    # save_target_path = os.path.join('/data1/hjh/ProjectData/Defogging/OTS', 'train_target_{}.h5'.format(datasetname))
+    # save_input_path = os.path.join('/data1/hjh/ProjectData/Defogging/OTS', 'train_input_{}.h5'.format(datasetname))
+    # target_h5f = h5py.File(save_target_path, 'w')
+    # input_h5f = h5py.File(save_input_path, 'w')
+    
+    save_target_path = lmdb.open(os.path.join(data_path, 'train_target_{}.h5'.format(datasetname)),map_size=int(1e12))
+    save_input_path = lmdb.open(os.path.join(data_path, 'train_input_{}.h5'.format(datasetname)),map_size=int(1e12))
+    txn_target = save_target_path.begin(write=True)
+    txn_input = save_input_path.begin(write=True)
+
+    train_num = 0
+    ls = os.listdir(input_path)
+    # random.shuffle(ls)
+    print(len(ls))
+    for input_file in tqdm(ls[0:10000],desc=f'正在保存:{patch}'):
+        target_file = input_file.split('_')[0] + '.jpg'
+        target = cv2.imread(os.path.join(target_path,target_file))
+        bt, gt, rt = cv2.split(target)
+        target = cv2.merge([rt, gt, bt])
+
+        for j in range(3): # 增加数据的多样性
+            input_img = cv2.imread(os.path.join(input_path,input_file))
+            bi, gi, ri = cv2.split(input_img)
+            if j == 0: # 融合 初步无雨 RGB
+                input_img = cv2.merge([ri, gi, bi])
+                target_img = target    
+                target_img = cv2.flip(target_img, 1)
+                input_img = cv2.flip(input_img, 1)
+            if j == 1: # 融合 初步无雨 IGB
+                #==========堆叠Input为指定格式
+                train_ZeroData = np.zeros((input_img.shape[0],input_img.shape[1])).flatten() 
+                input_img_HSI = cv2.cvtColor(target_img,cv2.COLOR_BGR2HSV)
+                hi, si, Ii = cv2.split(input_img_HSI)
+                train_ZeroData = np.vstack((train_ZeroData,hi.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,si.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,Ii.flatten()))
+                #==========BLS预处理数据================= # 2022.09.03
+                BLS_Ii=BLS_Test(IMG=train_ZeroData[1:,:],width=input_img.shape[0],height=input_img.shape[1]) # 对有雨图像进行预处理，获得 R 通道背景
+                #==========融合================ # 2022.09+.03
+                input_img = cv2.merge([BLS_Ii, gi, bi])
+                target_img = target                
+            if j == 2: # 融合 原图有雨 RGB
+                #==========堆叠Input为指定格式
+                train_ZeroData = np.zeros((input_img.shape[0],input_img.shape[1])).flatten() 
+                bi, gi, ri = cv2.split(input_img)
+                train_ZeroData = np.vstack((train_ZeroData,ri.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,gi.flatten()))
+                train_ZeroData = np.vstack((train_ZeroData,bi.flatten()))
+                #==========BLS预处理数据================= # 2022.09.03
+                BLS_ri=BLS_Test(IMG=train_ZeroData[1:,:],width=input_img.shape[0],height=input_img.shape[1]) # 对有雨图像进行预处理，获得 R 通道背景
+                #==========融合================ # 2022.09+.03
+                input_img = cv2.merge([BLS_ri, gi, bi])
+                target_img = target      
+
+            target_img = np.float32(normalize(target_img))
+            if target_img.transpose(2, 0, 1).shape[1] < patch_size:
+                print('wrong')
+                continue
+            target_patches= patchify(target_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
+            input_img = np.float32(normalize(input_img))
+            input_patches= patchify(input_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
+            for n in range(target_patches.shape[0]):
+                if target_file in set_target:
+                    txn_target.create_dataset(str(train_num).encode(),set_target[target_file].encode())
+                    # save_target. 
+                else:
+                    target_data = target_patches[n,:, :, :].copy()
+                    txn_target.put(str(train_num).encode(), pickle.dumps(target_data))
+
+                input_data = input_patches[n,:, :, :].copy()
+                txn_input.put(str(train_num).encode(), pickle.dumps(input_data))
+
+                train_num += 1
+        set_target[target_file] = str(train_num)
+        txn_input.commit()
+        txn_target.commit()
+        txn_target = save_target_path.begin(write=True)
+        txn_input = save_input_path.begin(write=True)
+        print("target file: %s # samples: %d" % (input_file, target_patches.shape[0]))
+
+    # target_h5f.close()
+    # input_h5f.close()
+
+    print('training set, # samples %d\n' % train_num)
 class Dataset(udata.Dataset):
     def __init__(self, data_path='.'):
         super(Dataset, self).__init__()
 
-        self.data_path ='/home/huangjh/Project/DeRain/JackData/outdoor/train'
-        target_path = os.path.join(self.data_path, 'train_target_outdoor.h5')
-        input_path = os.path.join(self.data_path, 'train_input_outdoor.h5')
+        self.data_path ='/data1/hjh/ProjectData/Defogging/O-HAZE'
+        target_path = os.path.join(self.data_path, 'train_target_O-HAZE.h5')
+        input_path = os.path.join(self.data_path, 'train_input_O-HAZE.h5')
 
         self.target_h5f = h5py.File(target_path, 'r')
         self.input_h5f = h5py.File(input_path, 'r')
-
-        self.keys = list(self.target_h5f.keys())
-        random.shuffle(self.keys)
+        # self.keys = list(self.target_h5f.keys())
+        # print(len(self.keys))
+        # print(len(list(self.input_h5f.keys())))
+        # random.shuffle(self.keys)
         # target_h5f.close()
         # input_h5f.close()
 
     def __len__(self):
-        return len(self.keys)
+        return 126093
 
     def __getitem__(self, index):
 
@@ -433,20 +661,19 @@ class Dataset(udata.Dataset):
 
         # self.target_h5f = h5py.File(target_path, 'r')
         # self.input_h5f = h5py.File(input_path, 'r')
-
-        key = self.keys[index]
-        target = np.array(self.target_h5f[key]) # 将数据转化为矩阵
-        input = np.array(self.input_h5f[key])
-
-        # target_h5f.close() 
-        # input_h5f.close()
-        
-        # x = input - target
-        # print(x)
+        # key = self.keys[]
+        target = np.array(self.target_h5f[str(index)]) # 将数据转化为矩阵
+        input = np.array(self.input_h5f[str(index)])
         return torch.Tensor(input), torch.Tensor(target)
 
 
 
 
-data_path = '/home/huangjh/Project/DeRain/JackData/outdoor/train'
-prepare_data_X2Data_2(data_path, 96, 80,'outdoor')
+set_target = dict()
+# prepare_OTS_Data(0)
+prepare_ITS_Data(0)
+
+from multicpu import multi_cpu
+# result = []
+
+# result = multi_cpu(prepare_ITS_Data, [0,2,4,6,8], 20, 1)

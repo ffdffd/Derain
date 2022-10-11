@@ -120,6 +120,40 @@ def main():
     print('Avg. time:', time_test/count)
 
 
+
+from SSIM import SSIM
+def progress(y_origin):
+    b, g, r = cv2.split(y_origin)
+    y = cv2.merge([r, g, b])
+    y = normalize(np.float32(y))
+    y = np.expand_dims(y.transpose(2, 0, 1), 0)
+    y = Variable(torch.Tensor(y))
+    return y
+def test():
+    model = AMCC2(opt.recurrent _iter, opt.use_GPU)
+    model = model.cuda()
+    model.load_state_dict(torch.load(os.path.join(opt.logdir, 'net_latest.pth')))
+    model.eval()
+    psnr_test ,pixel_metric,count = 0
+    for img_name in os.listdir(opt.data_path):
+        if is_image(img_name):
+            y_origin = cv2.imread(os.path.join(opt.data_path, img_name))
+            y = progress(y_origin).cuda()
+            with torch.no_grad(): 
+                if opt.use_GPU:
+                    torch.cuda.synchronize()
+                out, _ = model(y)
+                gt_path = os.path.join(opt.data_path.replace("rainy/",""), "no" + img_name )
+                gt = progress(cv2.imread(gt_path)).cuda()
+                criterion = SSIM()
+                pixel_metric += criterion(out, gt)
+                psnr_test += batch_PSNR(out,  gt, 1.)
+                print("[Test SSIM is] %f, [Test PSNR is] %d ==================" % (pixel_metric, psnr_test))
+            count += 1
+            psnr_test_average = psnr_test / count
+            pixel_metric_average = pixel_metric / count
+    return psnr_test_average,pixel_metric_average
+
 if __name__ == "__main__":
     main()
 
