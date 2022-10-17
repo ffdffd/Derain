@@ -3,7 +3,7 @@ import os.path
 import threading
 # import random
 import numpy as np
-
+import lmdb
 np.random.seed(0)
 import h5py # (5)pip install h5py
 import torch
@@ -442,14 +442,15 @@ def prepare_ITS_Data(patch,
     # train
     print('process training data')
     datasetname = 'ITS'
-    data_path = '/home/huangjiehui/Project/DerainNet/JackData/ITS/train'
+    data_path = '/data1/hjh/ProjectData/Defogging/ITS/ITS/train'
+    data = '/home/huangjiehui/Project/DerainNet/JackData/ITS/train'
     input_path = os.path.join(data_path,'ITS_haze')
     target_path = os.path.join(data_path,'ITS_clear')
     # save_target_path = os.path.join(data_path, 'train_target_{}.h5'.format(datasetname))
     # save_input_path = os.path.join(data_path, 'train_input_{}.h5'.format(datasetname))
     
-    save_target_path = lmdb.open(os.path.join(data_path, 'train_target_{}.h5'.format(datasetname)),map_size=int(1e11))
-    save_input_path = lmdb.open(os.path.join(data_path, 'train_input_{}.h5'.format(datasetname)),map_size=int(1e11))
+    save_target_path = lmdb.open(os.path.join(data, 'train_target_{}.h5'.format(datasetname)),map_size=int(1e11))
+    save_input_path = lmdb.open(os.path.join(data, 'train_input_{}.h5'.format(datasetname)),map_size=int(1e11))
     txn_target = save_target_path.begin(write=True)
     txn_input = save_input_path.begin(write=True)
 
@@ -458,10 +459,10 @@ def prepare_ITS_Data(patch,
     # # save_input_path = os.path.join(data_path, 'train_input_{}.h5'.format(datasetname))
     # target_h5f = h5py.File(save_target_path, 'w')
     # input_h5f = h5py.File(save_input_path, 'w')
-    train_num = 22392
+    train_num = 0
     ls = os.listdir(input_path)
     np.random.shuffle(ls)
-    for input_file in tqdm(ls[2551:10000],desc=f'正在保存:{patch}'):
+    for input_file in tqdm(ls[0:10000],desc=f'正在保存:{patch}'):
         target_file = input_file.split('_')[0] + '.png'
         target = cv2.imread(os.path.join(target_path,target_file))
         bt, gt, rt = cv2.split(target)
@@ -502,25 +503,25 @@ def prepare_ITS_Data(patch,
                 input_img = cv2.merge([BLS_ri, gi, bi])
                 target_img = target      
 
-            target_img = np.float32(normalize(target_img))
-            # target_patches = Im2Patch(target_img.transpose(2,0,1), win=patch_size, stride=stride)
-            target_patches= patchify(target_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
-            input_img = np.float32(normalize(input_img))
-            # input_patches = Im2Patch(input_img.transpose(2, 0, 1), win=patch_size, stride=stride)
-            input_patches= patchify(input_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
-            for n in range(target_patches.shape[0]):
-                if target_file in set_target:
-                    # target_h5f.create_dataset(str(train_num), data=set_target[target_file])
-                    txn_target.put(str(train_num).encode(),set_target[target_file].encode())
-                    # save_target. 
-                else:
-                    target_data = target_patches[n,:, :, :].copy()
-                    txn_target.put(str(train_num).encode(), pickle.dumps(target_data))
-                input_data = input_patches[n,:, :, :].copy()
-                txn_input.put(str(train_num).encode(), pickle.dumps(input_data))
-                train_num += 1
-            set_target[target_file] = str(train_num)
-        print("target file: %s # samples: %d" % (input_file, target_patches.shape[0]))
+        target_img = np.float32(normalize(target_img))
+        # target_patches = Im2Patch(target_img.transpose(2,0,1), win=patch_size, stride=stride)
+        target_patches= patchify(target_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
+        input_img = np.float32(normalize(input_img))
+        # input_patches = Im2Patch(input_img.transpose(2, 0, 1), win=patch_size, stride=stride)
+        input_patches= patchify(input_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
+        for n in range(target_patches.shape[0]):
+            # if target_file in set_target:
+            #     # target_h5f.create_dataset(str(train_num), data=set_target[target_file])
+            #     txn_target.put(str(train_num).encode(),set_target[target_file].encode())
+            #     # save_target. 
+            # else:
+            target_data = target_patches[n,:, :, :].copy()
+            txn_target.put(str(train_num).encode(), pickle.dumps(target_data))
+            input_data = input_patches[n,:, :, :].copy()
+            txn_input.put(str(train_num).encode(), pickle.dumps(input_data))
+            train_num += 1
+        # set_target[target_file] = str(train_num)
+        print("target file: %s # samples: %d train_num:%d" % (input_file, target_patches.shape[0],train_num))
         txn_input.commit()
         txn_target.commit()
         txn_target = save_target_path.begin(write=True)
@@ -550,10 +551,6 @@ def prepare_OTS_Data(patch,
     data_path = '/home/huangjiehui/Project/DerainNet/JackData/OTS'
     input_path = os.path.join(data_path,'haze')
     target_path = os.path.join(data_path,'clear_images')
-    # save_target_path = os.path.join('/data1/hjh/ProjectData/Defogging/OTS', 'train_target_{}.h5'.format(datasetname))
-    # save_input_path = os.path.join('/data1/hjh/ProjectData/Defogging/OTS', 'train_input_{}.h5'.format(datasetname))
-    # target_h5f = h5py.File(save_target_path, 'w')
-    # input_h5f = h5py.File(save_input_path, 'w')
     
     save_target_path = lmdb.open(os.path.join(data_path, 'train_target_{}.h5'.format(datasetname)),map_size=int(1e12))
     save_input_path = lmdb.open(os.path.join(data_path, 'train_input_{}.h5'.format(datasetname)),map_size=int(1e12))
@@ -604,32 +601,27 @@ def prepare_OTS_Data(patch,
                 input_img = cv2.merge([BLS_ri, gi, bi])
                 target_img = target      
 
-            target_img = np.float32(normalize(target_img))
-            if target_img.transpose(2, 0, 1).shape[1] < patch_size:
-                print('wrong')
-                continue
-            target_patches= patchify(target_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
-            input_img = np.float32(normalize(input_img))
-            input_patches= patchify(input_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
-            for n in range(target_patches.shape[0]):
-                if target_file in set_target:
-                    txn_target.create_dataset(str(train_num).encode(),set_target[target_file].encode())
-                    # save_target. 
-                else:
-                    target_data = target_patches[n,:, :, :].copy()
-                    txn_target.put(str(train_num).encode(), pickle.dumps(target_data))
+        target_img = np.float32(normalize(target_img))
+        if target_img.transpose(2, 0, 1).shape[1] < patch_size:
+            print('wrong')
+            continue
+        target_patches= patchify(target_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
+        input_img = np.float32(normalize(input_img))
+        input_patches= patchify(input_img.transpose(2, 0, 1),(3,patch_size,patch_size),step=stride).reshape(-1,3,patch_size,patch_size)
+        for n in range(target_patches.shape[0]):
+            target_data = target_patches[n,:, :, :].copy()
+            txn_target.put(str(train_num).encode(), pickle.dumps(target_data))
 
-                input_data = input_patches[n,:, :, :].copy()
-                txn_input.put(str(train_num).encode(), pickle.dumps(input_data))
+            input_data = input_patches[n,:, :, :].copy()
+            txn_input.put(str(train_num).encode(), pickle.dumps(input_data))
 
-                train_num += 1
-        set_target[target_file] = str(train_num)
+            train_num += 1
+        # set_target[target_file] = train_num-1
         txn_input.commit()
         txn_target.commit()
         txn_target = save_target_path.begin(write=True)
         txn_input = save_input_path.begin(write=True)
-        print("target file: %s # samples: %d" % (input_file, target_patches.shape[0]))
-
+        print("target file: %s # samples: %d, train_num%d:" % (input_file, target_patches.shape[0],train_num))
     # target_h5f.close()
     # input_h5f.close()
 
@@ -637,43 +629,257 @@ def prepare_OTS_Data(patch,
 class Dataset(udata.Dataset):
     def __init__(self, data_path='.'):
         super(Dataset, self).__init__()
-
-        self.data_path ='/data1/hjh/ProjectData/Defogging/O-HAZE'
-        target_path = os.path.join(self.data_path, 'train_target_O-HAZE.h5')
-        input_path = os.path.join(self.data_path, 'train_input_O-HAZE.h5')
-
-        self.target_h5f = h5py.File(target_path, 'r')
-        self.input_h5f = h5py.File(input_path, 'r')
-        # self.keys = list(self.target_h5f.keys())
-        # print(len(self.keys))
-        # print(len(list(self.input_h5f.keys())))
-        # random.shuffle(self.keys)
-        # target_h5f.close()
-        # input_h5f.close()
-
+        self.data_path = data_path
+        target_path = os.path.join(self.data_path, 'train_target_ITS.h5')
+        input_path = os.path.join(self.data_path, 'train_input_ITS.h5')
+        env1 = lmdb.open(target_path, map_size=int(1e11))
+        env2 = lmdb.open(input_path, map_size=int(1e11))
+        self.txn1 = env1.begin()
+        self.txn2 = env2.begin()
     def __len__(self):
-        return 126093
+        return 107226
+    def __getitem__(self, index):
+        target = pickle.loads(self.txn1.get(str(index).encode()))# 将数据转化为矩阵
+        input =  pickle.loads(self.txn2.get(str(index).encode()))
+        return torch.from_numpy(input), torch.from_numpy(target)
+    
+
+class Dataset_200H_patch(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain14000/Rain12600'):
+        super(Dataset_200H_patch, self).__init__()
+        self.data_path = data_path
+        self.img_names =  os.listdir(data_path)
+        self.num = 6    # 把一张一张大图分为num份
+    def __len__(self):
+        return len(self.img_names)*self.num
 
     def __getitem__(self, index):
+        # target
+        # GT path with target data
+            # !!!!!!RGB
+        y_origin = cv2.imread(os.path.join(self.data_path, self.img_names[index//self.num]))
+        gt_path = os.path.join(self.data_path, self.img_names[index//self.num]).replace("hazy",'GT')   # #  I-HAZE O-HAZE
+        gt = cv2.imread(gt_path)
+        
+        b, g, r = cv2.split(y_origin)
+        y_origin = cv2.merge([r, g, b])
+        b, g, r = cv2.split(gt)
+        gt = cv2.merge([r, g, b])
+        
+        gt= patchify(gt.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
+        y= patchify(y_origin.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
+        # gt,y = progress(gt),progress(y)
+        l = gt.shape[0]//(self.num-1)
+        return y[index%self.num*l : (index%self.num+1)*l ,:,:,:], gt[index%self.num*l : (index%self.num+1)*l ,:,:,:]
 
-        # target_path = os.path.join(self.data_path, 'train_target.h5')
-        # input_path = os.path.join(self.data_path, 'train_input.h5')
+class Dataset_200H_patch(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain14000/Rain12600'):
+        super(Dataset_200H_patch, self).__init__()
+        self.data_path = data_path
+        self.img_names =  os.listdir(data_path)
+        self.num = 6    # 把一张一张大图分为num份
+    def __len__(self):
+        return len(self.img_names)*self.num
 
-        # self.target_h5f = h5py.File(target_path, 'r')
-        # self.input_h5f = h5py.File(input_path, 'r')
-        # key = self.keys[]
-        target = np.array(self.target_h5f[str(index)]) # 将数据转化为矩阵
-        input = np.array(self.input_h5f[str(index)])
+    def __getitem__(self, index):
+        # target
+        # GT path with target data
+            # !!!!!!RGB
+        y_origin = cv2.imread(os.path.join(self.data_path, self.img_names[index//self.num]))
+        gt_path = os.path.join(self.data_path, self.img_names[index//self.num]).replace("hazy",'GT')   # #  I-HAZE O-HAZE
+        gt = cv2.imread(gt_path)
+        
+        b, g, r = cv2.split(y_origin)
+        y_origin = cv2.merge([r, g, b])
+        b, g, r = cv2.split(gt)
+        gt = cv2.merge([r, g, b])
+        
+        gt= patchify(gt.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
+        y= patchify(y_origin.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
+        # gt,y = progress(gt),progress(y)
+        l = gt.shape[0]//(self.num-1)
+        return y[index%self.num*l : (index%self.num+1)*l ,:,:,:], gt[index%self.num*l : (index%self.num+1)*l ,:,:,:]
+    
+
+class Dataset_Rain200L(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain200L/Rain200L/train'):
+        super(Dataset_Rain200L, self).__init__()
+        self.data_path = data_path
+        self.target_names =  data_path+'/norain/'
+        self.input_names =  data_path+'/rain/'
+    def __len__(self):
+        return len(os.listdir(self.input_names))
+    def __getitem__(self, index):
+        target_names = self.target_names + f'norain-{index+1}.png'
+        input_names =  self.input_names + f'norain-{index+1}x2.png'
+        y_origin = cv2.imread(os.path.join(input_names))
+        gt = cv2.imread(os.path.join(target_names))
+        gt = progress(gt)
+        y = progress(y_origin)
+        return y, gt
+class Dataset_14000(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/home/huangjh/Data/ProjectData/RainData/Rain14000/Rain1400/train_input.h5'):
+        super(Dataset_14000, self).__init__()
+        self.data_path = data_path
+        target_path = os.path.join(self.data_path, 'train_target.h5')
+        input_path = os.path.join(self.data_path, 'train_input.h5')
+        self.target_h5f = h5py.File(target_path, 'r')
+        self.input_h5f = h5py.File(input_path, 'r')
+        self.keys = list(self.target_h5f.keys())
+        print(len(self.keys))
+
+    def __len__(self):
+        return(len(self.keys))
+    def __getitem__(self, index):
+        key = self.keys[index]
+        target = np.array(self.target_h5f[key])
+        input = np.array(self.input_h5f[key])
         return torch.Tensor(input), torch.Tensor(target)
+    
+def progress(y_origin):
+    #  rbg 255 add_channel 32
+    b, g, r = cv2.split(y_origin)
+    y = cv2.merge([r, g, b])
+    
+    y = normalize(np.float32(y)).transpose(2, 0, 1)
+    high = y.shape[1]//32
+    wight = y.shape[2]//32
+    y = y[:, 0:high*32, 0:wight*32]
+    # y = torch.Tensor(y)
+    return y
+class Dataset_X2(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/X2Data'):
+        super(Dataset_X2, self).__init__()
+        self.data_path = data_path
+        self.target_names =  data_path+'/norain/'
+        self.input_names =  data_path+'/rain/'
+        # self.input_names = [data_path+'/rain/'+i for i in input_names]
+    def __len__(self):
+        return 1800
+    def __getitem__(self, index):
+        y_origin = cv2.imread(self.input_names+f'norain-{index+1}x2.png')
+        gt = cv2.imread(self.target_names+f'norain-{index+1}.png')
+        y,gt = progress(y_origin),progress(gt)
+        return y, gt
+class Dataset_OTS(udata.Dataset):
+    def __init__(self, data_path='.'):
+        super(Dataset_OTS, self).__init__()
+        self.data_path ='/home/huangjiehui/Project/DerainNet/JackData/OTS'
+        target_path = os.path.join(self.data_path, 'train_target_OTS.h5')
+        input_path = os.path.join(self.data_path, 'train_input_OTS.h5')
+        env1 = lmdb.open(target_path, map_size=int(1e11))
+        env2 = lmdb.open(input_path, map_size=int(1e11))
+        self.txn1 = env1.begin()
+        self.txn2 = env2.begin()
+    def __len__(self):
+        return 69543
+    def __getitem__(self, index):
+        target = pickle.loads(self.txn1.get(str(index).encode()))# 将数据转化为矩阵
+        input =  pickle.loads(self.txn2.get(str(index).encode()))
+        return torch.from_numpy(input), torch.from_numpy(target)
 
 
+class Dataset_DID(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/DID-Data/DID-MDN-training'):
+        super(Dataset_DID, self).__init__()
+        ls1 = os.listdir(data_path+'/Rain_Heavy/train2018new/')
+        ls1 = [data_path+'/Rain_Heavy/train2018new/'+i for i in ls1]
+        ls2 = os.listdir(data_path+'/Rain_Heavy/train2018new/')
+        ls1+=[data_path+'/Rain_Heavy/train2018new/'+i for i in ls2]
+        ls3 = os.listdir(data_path+'/Rain_Heavy/train2018new/')
+        ls1 += [data_path+'/Rain_Heavy/train2018new/'+i for i in ls3]
+        self.keys = ls1
+        print(len)
+        
+    def __len__(self):
+        return len(self.keys)
+    def __getitem__(self, index):
+        key = self.keys[index]
+        img = cv2.imread(key)
+        b, g, r = cv2.split(img)
+        img = cv2.merge([r, g, b])
+        img = np.float32(normalize(img)).transpose(2,0,1)
+        return torch.Tensor(img[:,:,0:512]), torch.Tensor(img[:,:,512:1024])
+    
 
+class Dataset_X2patch(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/X2Data'):
+        super(Dataset_X2patch, self).__init__()
+        self.data_path = data_path
+        self.target_names =  data_path+'/norain_H/'
+        self.input_names =  data_path+'/rain_H/'
+        self.num = 3    # 把一张一张大图分为num份
+    def __len__(self):
+        return len(os.listdir(self.input_names))*self.num
+    def __getitem__(self, index):
+        # target
+        # GT path with target data
+            # !!!!!!RGB
+        y_origin = cv2.imread(self.input_names+f'norain-{index//self.num+1}x2.png')
+        gt = cv2.imread(self.target_names+f'norain-{index//self.num+1}.png')
+        b, g, r = cv2.split(y_origin)
+        y_origin = cv2.merge([r, g, b])
+        b, g, r = cv2.split(gt)
+        gt = cv2.merge([r, g, b])
+        
+        gt= patchify(gt.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
+        y= patchify(y_origin.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
+        # gt,y = progress(gt),progress(y)
+        index = index%self.num
+        if gt.shape[0]% (self.num-1) == 0:
+            l = gt.shape[0]//(self.num)
+            return y[index*l : (index+1)*l ,:,:,:], gt[index.num*l : (index+1)*l ,:,:,:]
+        else:
+            l = gt.shape[0]//(self.num-1)
+            if index == (self.num-1):
+                index = 0
+            return y[index*l : (index+1)*l ,:,:,:], gt[index*l : (index+1)*l ,:,:,:]
 
-set_target = dict()
-# prepare_OTS_Data(0)
-prepare_ITS_Data(0)
+    
 
-from multicpu import multi_cpu
-# result = []
+class Dataset_RainX2_H(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/X2Data'):
+        super(Dataset_RainX2_H, self).__init__()
+        self.data_path = data_path
+        self.target_names =  data_path+'/norain_H/'
+        self.input_names =  data_path+'/rain_H/'
+    def __len__(self):
+        return len(os.listdir(self.input_names))
+    def __getitem__(self, index):
+        target_names = self.target_names + f'norain-{index+1}.png'
+        input_names =  self.input_names + f'norain-{index+1}x2.png'
+        y_origin = cv2.imread(os.path.join(input_names))
+        gt = cv2.imread(os.path.join(target_names))
+        gt = progress(gt)
+        y = progress(y_origin)
+        return y, gt
 
-# result = multi_cpu(prepare_ITS_Data, [0,2,4,6,8], 20, 1)
+class Dataset_Rain200H(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain200H/Rain200H/train'):
+        super(Dataset_Rain200H, self).__init__()
+        self.data_path = data_path
+        self.target_names =  data_path+'/norain/'
+        self.input_names =  data_path+'/rain/'
+    def __len__(self):
+        return len(os.listdir(self.input_names))
+    def __getitem__(self, index):
+        target_names = self.target_names + f'norain-{index+1}.png'
+        input_names =  self.input_names + f'norain-{index+1}x2.png'
+        y_origin = cv2.imread(os.path.join(input_names))
+        gt = cv2.imread(os.path.join(target_names))
+        gt = progress(gt)
+        y = progress(y_origin)
+        return y, gt
+
+if __name__ == "__main__":
+    pass
+    # set_target = dict()
+    # prepare_ITS_Data(0)
+    # prepare_OTS_Data(0)
+    # result = []
+
+    # result = multi_cpu(prepare_ITS_Data, [0,2,4,6,8], 20, 1)
+    # x = Dataset()
+    # print(x.__getitem__(2))
+    x = Dataset_X2patch()
+    x.__getitem__(2)
