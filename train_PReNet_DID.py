@@ -4,11 +4,11 @@ import numpy as np # (2)pip install numpy
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 parser = argparse.ArgumentParser(description="PReNet_train")
 parser.add_argument("--preprocess", type=bool, default=True, help='run prepare_data or not')
-parser.add_argument("--batch_size", type=int, default=1, help="Training batch size") # batch_size 设置为 18，游戏本顶不住，这里改为2
+parser.add_argument("--batch_size", type=int, default=24, help="Training batch size") # batch_size 设置为 18，游戏本顶不住，这里改为2
 parser.add_argument("--epochs", type=int, default=300, help="Number of training epochs") # 为了快速得到结果，减少epoch 100 变为 5
 parser.add_argument("--milestone", type=int, default=[30,50,80], help="When to decay learning rate")
 parser.add_argument("--lr", type=float, default=1e-3, help="initial learning rate")
-parser.add_argument("--save_path", type=str, default="/home/huangjiehui/Project/DerainNet/Logs/AM2_14000", help='path to save models and log files')  # 3.28 BUG 防止add path时，斜杠不一致
+parser.add_argument("--save_path", type=str, default="/home/huangjiehui/Project/DerainNet/JackCode/Derain/Logs/DID_patch_192_L", help='path to save models and log files')  # 3.28 BUG 防止add path时，斜杠不一致
 parser.add_argument("--save_freq",type=int,default=1,help='save intermediate model')
 parser.add_argument("--Logsave_path",type=str, default="log1.txt",help='path to training data')  # 3.28 BUG 防止add path时，斜杠不一致
 # parser.add_argument("--data_path",type=str, default="/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain14000/Rain12600",help='path to training data')  # 4.25 训练100H目录下的雨条纹图像
@@ -16,7 +16,7 @@ parser.add_argument("--use_gpu", type=bool, default=True, help='use GPU or not')
 parser.add_argument("--gpu_id", type=str, default="0", help='GPU id')
 parser.add_argument("--recurrent_iter", type=int, default=6, help='number of recursive stages')
 opt = parser.parse_args(args=[])
-from test import test
+
 import torch  #　注意3.28官网不给10.2的源码下载了，哈哈哈vision tPorchau，还好俺们有清华源，将cu113 改为 cu102 即可，因为我电脑是10.2的cuda，装113会使得无法使用gpu！
 # pip3 install torch torchdio --extra-index-url https://download.pytorch.org/whl/cu102　-i https://pypi.tuna.tsinghua.edu.cn/simple BUG emmm,好像无法写入,有个小BUG, 那就自己换conda命令吧
 # (3)conda install pytorch torch vision torchaudio cudatoolkit=10.2 -c pytorch 成功~ (通道没加清华源就 末尾加 -c pytorch 用官网的)
@@ -52,11 +52,11 @@ if  torch.cuda.device_count()>1:
     torch.cuda.manual_seed_all(0)
 
 def main():
-    opt.batch_size
+
     print('Loading dataset ...\n')
     
-    dataset_train = Dataset_14000()
-    model = AMCC2_o(recurrent_iter=opt.recurrent_iter).cuda()
+    dataset_train = Dataset_did_h5()
+    model = AMCC2(recurrent_iter=opt.recurrent_iter, use_GPU=opt.use_gpu).cuda()
     
     # loader_train = DataLoader(dataset=dataset_train, num_workers=16, batch_size=opt.batch_size, shuffle=True)
     if  torch.cuda.device_count()>1:
@@ -93,6 +93,8 @@ def main():
     scheduler = MultiStepLR(optimizer, milestones=opt.milestone, gamma=0.2)  # learning rates
     # start training
     step = 0 
+    # Note=open('/home/huangjh/Project/PDAnalysis/Result/'+Logsave_path,'a')
+    # Note.truncate(0) # 初始化tx
     sum = 0
     
     for epoch in range(initial_epoch, opt.epochs):
@@ -103,11 +105,15 @@ def main():
             print('learning rate %f' % param_group["lr"]) # learning rate 0.001000
         ## epoch training start
         for i, (input_train, target_train) in enumerate(tqdm(loader_train)):
+            # sum += batch_PSNR(input_train,target_train,1.0)
+            # print(sum/(i+1))
+            # continue
             model.train()  # nn.Module.train的继承
             model.zero_grad()
             optimizer.zero_grad()
             
             count, psnr_all= 0,0
+            # input_train, target_train = Variable(input_train), Variable(target_train)
 
             if opt.use_gpu:
                 input_train, target_train = input_train.cuda(), target_train.cuda()
@@ -115,13 +121,14 @@ def main():
             out_train, times = model(input_train)
             pixel_metric = criterion(target_train, out_train) # target_train.size()---torch.Size([2, 3, 100, 100]); out_train.size()---torch.Size([2, 3, 100, 100])
             loss = -pixel_metric  
-            if 1: # 输出图像
+            # loss = -batch_PSNR(out_train, target_train, 1.) 
+            if 0:
                 x = utils.make_grid(torch.cat((target_train.detach(),input_train.detach())), nrow=8, normalize=False, scale_each=True)
                 x = np.uint8(255 * x.cpu().numpy().squeeze())
                 r, g, b = cv2.split(x.transpose(1, 2, 0))
                 cv2.imwrite('/home/huangjiehui/Project/DerainNet/JackCode/Derain/1.jpg',cv2.merge([b ,g, r]))
-                print("down")
-            if 0: 
+                print("1111111")
+            if 0:
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -160,26 +167,14 @@ def main():
             if epoch % opt.save_freq == 0:
                 torch.save(model.state_dict(), os.path.join(opt.save_path, 'net_epoch%d.pth' % (epoch+1)))
                 torch.save(model.state_dict(), os.path.join(opt.save_path, 'net_latest.pth'))
-                # res = []
-            #     test(model,None,Dataset_Rain200(Rain_200L_data_path),count)
-            #     test(model,None,Dataset_Rain200(Rain_200H_data_path),count)
-            #     test(model,None,Dataset_Rain200(Rain_100H_data_path),count)
-            #     test(model,None,Dataset_Rain200(Rain_100L_data_path),count)
-            #     test(model,None,Dataset_DID_800(DID_data_path),count)
-            #     test(model,None,Dataset_DID_800(data_path_800),count)
-            #     Note=open(opt.save_path+'/log_test.txt','a')
-            #     Note.write("[epoch %d][%d/%d] loss: %.4f, pixel_metric: %.4f, PSNR: %.4f" %
-            #   (epoch+1, i+1, len(loader_train), loss.item(), pixel_metric.item(), psnr_all/count))
-            #     Note.write('\n')
-                
-                
+                     
                         
             # from test_PReNet import test
             # psnr_test_average,pixel_metric_average = test(model)
             # # 可视化
             # # out_train, _ = model(input_train)
             # # out_train = torch.clamp(out_train, 0., 1.)
-            # im_target = utils.make_grid(target_train.data, nrow=8, normalize=False, scale_each=True)
+            im_target = utils.make_grid(target_train.data, nrow=8, normalize=False, scale_each=True)
             # # im_input = utils.make_grid(input_train.data, nrow=8, normalize=False, scale_each=True)
             # # im_derain = utils.make_grid(out_train.data, nrow=8, normalize=False, scale_each=True)
             # # writer.add_image('clean image', im_target, epoch+1)

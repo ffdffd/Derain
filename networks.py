@@ -768,7 +768,9 @@ class AMCC2(nn.Module):
                 pred3 = self.conv_final(core3) 
         #============================================ Layer 3 ===================================
         batch_size, row, col = input.size(0), input.size(2), input.size(3)
-        del conv1,conv2,conv3,conv4,conv5,conv6,conv7,conv8
+        # del conv1,conv2,conv3,conv4,conv5,conv6,conv7,conv8
+        # torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         x = input
         h = Variable(torch.zeros(batch_size, 32, row, col))
         c = Variable(torch.zeros(batch_size, 32, row, col))
@@ -781,7 +783,9 @@ class AMCC2(nn.Module):
         input1 = torch.cat((input, pred1), 1) # 将input和core1进行拼接  得到input1 ([18, 6, 96, 96]) 
         input2 = torch.cat((input1, pred2), 1) # 将input1和core2进行拼接  得到input2 ([18, 9, 96, 96]) 
         input3 = torch.cat((input2, pred3), 1) # 将input2和core2进行拼接  得到input3 ([18, 12, 96, 96]) 注意，input堆叠多次后，self.conv0(x) 的输入通道也要相应改变
-        del input1,input2
+        # del input1,input2
+        # torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         for i in range(self.iteration):  #　以下逐级扩张
             if i==0: # 第一次进行扩张
                 x = torch.cat((input3, x), 1)

@@ -163,50 +163,58 @@ class Dataset_DID_800(udata.Dataset):
 from torch.utils.data import DataLoader
 def test(model,model_path,datapath,name_index):
     model = model.cuda()
-    if model_path is not None:
-        model.load_state_dict(torch.load(os.path.join(model_path, 'net_latest.pth')))
-        print('load_model from ' + os.path.join(model_path, 'net_latest.pth'))
-    model.eval()
-    psnr_test ,pixel_metric,count,psnr_max,ssim_max = 0,0,0,0,0
-    dataset = datapath
-    with torch.no_grad(): 
-        loader_train = DataLoader(dataset=dataset, num_workers=16, batch_size=1, shuffle=False)
-        if opt.use_GPU:
-            torch.cuda.synchronize()
-            
-        for out, gt in tqdm.tqdm(loader_train):
-            out_o = out.cuda().type(torch.float32)
-            gt = torch.squeeze(gt.cuda(),0).type(torch.float32)
-            if (gt.shape[0] == 0 ):
-                continue
-            # torch.FloatTensor()
-            # try:
-            # out, _ = model(torch.squeeze(gt,0))
-            out, _ = model(torch.squeeze(out_o,0))
-            
-            out = torch.clamp(out, 0., 1.)
-            criterion = SSIM()
-            loss = criterion(out, gt) * out.shape[0]
-            pixel_metric += loss
-            psnr_cur = batch_PSNR(out,  gt, 1.) * out.shape[0]
-            psnr_test += psnr_cur
-            if psnr_cur >= psnr_max:
-                psnr_max = psnr_cur
-            if loss >= ssim_max:
-                ssim_max = loss
-            count += out.shape[0]
-            print("[Test SSIM is] %0.2f, [Test PSNR is] %0.2f  [Current PSNR]%0.2f [max ]%0.2f maxssim %0.2f==================" % (pixel_metric/ count, psnr_test/ count,psnr_cur,psnr_max,ssim_max))
-            if 1: # 输出图像
-                # x = utils.make_grid(torch.cat((out,gt,torch.squeeze(out_o,0))), nrow=8, normalize=False, scale_each=True)
-                x = utils.make_grid(torch.cat((out,gt,torch.squeeze(out_o,0))))
-                x = np.uint8(255 * x.cpu().numpy().squeeze())
-                r, g, b = cv2.split(x.transpose(1, 2, 0))
-                cv2.imwrite(f'/home/huangjiehui/Project/DerainNet/JackCode/Derain/Result/{count}.jpg',cv2.merge([b ,g, r]))
+    i = 1
+    while os.path.exists(os.path.join(model_path, f'net_epoch{i}.pth')):
+        model.load_state_dict(torch.load(os.path.join(model_path, f'net_epoch{i}.pth')))
+        print('load_model from ' + os.path.join(model_path, f'net_epoch{i}.pth'))
+        model.eval()
+        psnr_test ,pixel_metric,count,psnr_max,ssim_max = 0,0,0,0,0
+        dataset = datapath
+        with torch.no_grad(): 
+            loader_train = DataLoader(dataset=dataset, num_workers=16, batch_size=1, shuffle=False)
+            if opt.use_GPU:
+                torch.cuda.synchronize()
+                
+            for out, gt in tqdm.tqdm(loader_train):
+                out_o = out.cuda().type(torch.float32)
+                gt = torch.squeeze(gt.cuda(),0).type(torch.float32)
+                if (gt.shape[0] == 0 ):
+                    continue
+                # torch.FloatTensor()
+                # try:
+                # out, _ = model(torch.squeeze(gt,0))
+                out, _ = model(torch.squeeze(out_o,0))
+                
+                out = torch.clamp(out, 0., 1.)
+                criterion = SSIM()
+                loss = criterion(out, gt) * out.shape[0]
+                pixel_metric += loss
+                psnr_cur = batch_PSNR(out,  gt, 1.) * out.shape[0]
+                psnr_test += psnr_cur
+                if psnr_cur >= psnr_max:
+                    psnr_max = psnr_cur
+                if loss >= ssim_max:
+                    ssim_max = loss
+                count += out.shape[0]
+                print("[Test SSIM is] %0.2f, [Test PSNR is] %0.2f  [Current PSNR]%0.2f [max ]%0.2f maxssim %0.2f==================" % (pixel_metric/ count, psnr_test/ count,psnr_cur,psnr_max,ssim_max))
+                if 1: # 输出图像
+                    # x = utils.make_grid(torch.cat((out,gt,torch.squeeze(out_o,0))), nrow=8, normalize=False, scale_each=True)
+                    x = utils.make_grid(torch.cat((out,gt,torch.squeeze(out_o,0))))
+                    x = np.uint8(255 * x.cpu().numpy().squeeze())
+                    r, g, b = cv2.split(x.transpose(1, 2, 0))
+                    cv2.imwrite(f'/home/huangjiehui/Project/DerainNet/JackCode/Derain/Result/{count}.jpg',cv2.merge([b ,g, r]))
             # except:
             #     pass
-            # break
-    psnst_average = psnr_test / count
-    pixel_metric_average = pixel_metric / count
+            # brea
+            psnst_average = psnr_test / count
+            pixel_metric_average = pixel_metric / count
+            Note=open('/home/huangjiehui/Project/DerainNet/JackCode/Derain/Result_each_e'+'/log.txt','a')
+            Note.write("[epoch %d] , pixel_metric: %.4f, PSNR: %.4f" %
+                (i, pixel_metric_average.item(), psnst_average.item()))
+            Note.write('\n')
+            i+=1
+
+        
     return psnst_average,psnr_max,pixel_metric_average,ssim_max
 
 if __name__ == "__main__":
@@ -242,7 +250,7 @@ if __name__ == "__main__":
     net = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain'
     
     para = X2path
-    res += test(model,para,Dataset_Rain200(Rain_200H_data_path),count)
+    res += test(model,para,Dataset_Rain200(Rain_100L_data_path),count)
     # res += test(model,para,Dataset_DID_800(DID_data_path),count)
     # # quit()
     # count+=1
