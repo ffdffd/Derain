@@ -203,21 +203,22 @@ def test(model,model_path,datapath,name_index):
     return psnst_average,pixel_metric_average,psnr_max,ssim_max
 
 if __name__ == "__main__":
+    
+    # 模型地址
     I_HAZE_log_path = '/home/huangjiehui/Project/DerainNet/Logs/Train_ITS_2'
     O_HAZE_log_path = '/home/huangjiehui/Project/DerainNet/Train_OTS2'
     SOTS_I_log_path = '/home/huangjiehui/Project/DerainNet/Logs/Train_ITS_2'
-    derain_path1 = '/home/huangjiehui/Project/DerainNet/Logs/14000'
-    derain_path2 = '/home/huangjiehui/Project/DerainNet/Logs/DID_woBLS2'
-    
     DID_data_path = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/DID-Data/testing_fu'
     data_path_800 = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain800/Rain800/rain800_test'
-    
+   
     path_200L = '/home/huangjiehui/Project/DerainNet/Logs/200L'
     path_X2_H_patch  = '/home/huangjiehui/Project/DerainNet/Logs/X2_H_patch'
     X2path = "/home/huangjiehui/Project/DerainNet/Logs/X2"
     path_X2_H = '/home/huangjiehui/Project/DerainNet/Logs/X2_H'
     path_JN_14000 = '/home/huangjiehui/Project/DerainNet/Logs/JN_14000'
     path_20H = "/home/huangjiehui/Project/DerainNet/Logs/X2_H"
+    
+    #  数据地址
     Rain_200H_data_path = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain200H/Rain200H/test'
     Rain_200L_data_path = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain200L/Rain200L/test'
     Rain_100H_data_path = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain100H'
@@ -226,14 +227,11 @@ if __name__ == "__main__":
     model = AMCC2(use_GPU=True)
     # model = AMCC2(use_GPU=True)
     
-    para = X2path
-    para = path_JN_14000
     res = []
     count = 0
     net = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain'
     
     para = path_200L
-    
     res += test(model,para,Dataset_Rain200(Rain_200L_data_path),count)
     # res += test(model,path_X2_H_patch,Dataset_DID_800(DID_data_path),count)
     # quit()
