@@ -104,42 +104,130 @@ class Dataset_did_h5(udata.Dataset):
         target = np.array(self.target_h5f[key])
         input = np.array(self.input_h5f[key])
         return torch.Tensor(target),torch.Tensor(input)
-    
-class Dataset(udata.Dataset):
-    # def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/ITS/train'):
-    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData'):
-        super(Dataset, self).__init__()
+   
+
+# class Dataset_OTS(udata.Dataset):
+#     def __init__(self, data_path='.'):
+#         super(Dataset_OTS, self).__init__()
+#         self.data_path ='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData'
+#         target_path = os.path.join(self.data_path, 'train_target_OTS.h5')
+#         input_path = os.path.join(self.data_path, 'train_input_OTS.h5')
+#         env1 = lmdb.open(target_path, map_size=int(1e11))
+#         env2 = lmdb.open(input_path, map_size=int(1e11))
+#         self.txn1 = env1.begin()
+#         self.txn2 = env2.begin()
+#     def __len__(self):
+#         return 69543
+#     def __getitem__(self, index):
+#         target = pickle.loads(self.txn1.get(str(index).encode()))# 将数据转化为矩阵
+#         input =  pickle.loads(self.txn2.get(str(index).encode()))
+#         return torch.from_numpy(input), torch.from_numpy(target)
+     
+class Dataset_ITS_o(udata.Dataset):
+    def __init__(self, data_path='/data1/hjh/ProjectData/Defogging/ITS/ITS/train'):
+    # def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData'):
+        super(Dataset_ITS_o, self).__init__()
         self.data_path = data_path
-        target_path = os.path.join(self.data_path, 'train_target_OTS.h5')
-        input_path = os.path.join(self.data_path, 'train_input_OTS.h5')
-        env1 = lmdb.open(target_path, map_size=int(1e11))
-        env2 = lmdb.open(input_path, map_size=int(1e11))
-        self.txn1 = env1.begin()
-        self.txn2 = env2.begin()
+        self.target_path = os.path.join(self.data_path, 'ITS_clear/')
+        self.input_path = os.path.join(self.data_path, 'ITS_haze/')
+        self.ls1 = os.listdir(self.input_path)[:1600]
+        
     def __len__(self):
-        return 107226
+        return 1600
     def __getitem__(self, index):
-        target = pickle.loads(self.txn1.get(str(index).encode()))# 将数据转化为矩阵
-        input =  pickle.loads(self.txn2.get(str(index).encode()))
-        return torch.from_numpy(input), torch.from_numpy(target)
+        input_names = self.input_path + self.ls1[index] 
+        target_names = self.target_path+ self.ls1[index].split('_')[0] + '.png'
+        y_origin = cv2.imread(os.path.join(input_names))
+        gt = cv2.imread(os.path.join(target_names))
+        gt = progress(gt)
+        y = progress(y_origin)
+        return y, gt
+
+class Dataset_OTS_o(udata.Dataset):
+    def __init__(self, data_path='/home/huangjiehui/Project/DerainNet/JackData/OTS'):
+    # def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData'):
+        super(Dataset_OTS_o, self).__init__()
+        self.data_path = data_path
+        self.target_path = os.path.join(self.data_path, 'clear_images/')
+        self.input_path = os.path.join(self.data_path, 'haze/')
+        self.ls1 = os.listdir(self.input_path)[:1600]
+        
+    def __len__(self):
+        return 1600
+    def __getitem__(self, index):
+        input_names = self.input_path + self.ls1[index] 
+        target_names = self.target_path+ self.ls1[index].split('_')[0] + '.jpg'
+        y_origin = cv2.imread(input_names)
+        gt = cv2.imread(target_names)
+        gt = progress(gt)
+        y = progress(y_origin)
+        return y, gt
+     
+# class Dataset_ITS(udata.Dataset):
+#     def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/ITS/train'):
+#     # def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData'):
+#         super(Dataset_ITS, self).__init__()
+#         self.data_path = data_path
+#         target_path = os.path.join(self.data_path, 'train_target_ITS.h5')
+#         input_path = os.path.join(self.data_path, 'train_input_ITS.h5')
+#         env1 = lmdb.open(target_path, map_size=int(1e11))
+#         env2 = lmdb.open(input_path, map_size=int(1e11))
+#         self.txn1 = env1.begin()
+#         self.txn2 = env2.begin()
+#     def __len__(self):
+#         return 107226
+#     def __getitem__(self, index):
+#         target = pickle.loads(self.txn1.get(str(index).encode()))# 将数据转化为矩阵
+#         input =  pickle.loads(self.txn2.get(str(index).encode()))
+#         return torch.from_numpy(input), torch.from_numpy(target)
     
+
+
+# class Dataset_200H_patch(udata.Dataset):
+#     def __init__(self, data_path='.'):
+#         super(Dataset_200H_patch, self).__init__()
+#         self.data_path = data_path
+#         self.img_names =  os.listdir(data_path)
+#         self.num = 6    # 把一张一张大图分为num份
+#     def __len__(self):
+#         return len(self.img_names)*self.num
+
+#     def __getitem__(self, index):
+#         # target
+#         # GT path with target data
+#             # !!!!!!RGB
+#         y_origin = cv2.imread(os.path.join(self.data_path, self.img_names[index//self.num]))
+#         gt_path = os.path.join(self.data_path, self.img_names[index//self.num]).replace("hazy",'GT')   # #  I-HAZE O-HAZE
+#         gt = cv2.imread(gt_path)
+        
+#         b, g, r = cv2.split(y_origin)
+#         y_origin = cv2.merge([r, g, b])
+#         b, g, r = cv2.split(gt)
+#         gt = cv2.merge([r, g, b])
+        
+#         gt= patchify(gt.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
+#         y= patchify(y_origin.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
+#         # gt,y = progress(gt),progress(y)
+#         l = gt.shape[0]//(self.num-1)
+#         return y[index%self.num*l : (index%self.num+1)*l ,:,:,:], gt[index%self.num*l : (index%self.num+1)*l ,:,:,:]
 
 class Dataset_200H_patch(udata.Dataset):
-    def __init__(self, data_path='.'):
+    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain200H/Rain200H/train'):
         super(Dataset_200H_patch, self).__init__()
         self.data_path = data_path
-        self.img_names =  os.listdir(data_path)
-        self.num = 6    # 把一张一张大图分为num份
+        self.target_names =  data_path+'/norain/'
+        self.input_names =  data_path+'/rain/'
+        self.num = 3   # 把一张一张大图分为num份
     def __len__(self):
-        return len(self.img_names)*self.num
-
+        return len(os.listdir(self.input_names))*self.num
     def __getitem__(self, index):
         # target
         # GT path with target data
             # !!!!!!RGB
-        y_origin = cv2.imread(os.path.join(self.data_path, self.img_names[index//self.num]))
-        gt_path = os.path.join(self.data_path, self.img_names[index//self.num]).replace("hazy",'GT')   # #  I-HAZE O-HAZE
-        gt = cv2.imread(gt_path)
+        target_names = self.target_names + f'norain-{index//self.num +1}.png'
+        input_names =  self.input_names + f'norain-{index//self.num +1}x2.png'
+        y_origin = cv2.imread(os.path.join(input_names))
+        gt = cv2.imread(os.path.join(target_names))
         
         b, g, r = cv2.split(y_origin)
         y_origin = cv2.merge([r, g, b])
@@ -148,37 +236,13 @@ class Dataset_200H_patch(udata.Dataset):
         
         gt= patchify(gt.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
         y= patchify(y_origin.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
-        # gt,y = progress(gt),progress(y)
-        l = gt.shape[0]//(self.num-1)
-        return y[index%self.num*l : (index%self.num+1)*l ,:,:,:], gt[index%self.num*l : (index%self.num+1)*l ,:,:,:]
-
-class Dataset_200H_patch(udata.Dataset):
-    def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain14000/Rain12600'):
-        super(Dataset_200H_patch, self).__init__()
-        self.data_path = data_path
-        self.img_names =  os.listdir(data_path)
-        self.num = 6    # 把一张一张大图分为num份
-    def __len__(self):
-        return len(self.img_names)*self.num
-
-    def __getitem__(self, index):
-        # target
-        # GT path with target data
-            # !!!!!!RGB
-        y_origin = cv2.imread(os.path.join(self.data_path, self.img_names[index//self.num]))
-        gt_path = os.path.join(self.data_path, self.img_names[index//self.num]).replace("hazy",'GT')   # #  I-HAZE O-HAZE
-        gt = cv2.imread(gt_path)
-        
-        b, g, r = cv2.split(y_origin)
-        y_origin = cv2.merge([r, g, b])
-        b, g, r = cv2.split(gt)
-        gt = cv2.merge([r, g, b])
-        
-        gt= patchify(gt.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
-        y= patchify(y_origin.transpose(2, 0, 1),(3,96,96),step=96).reshape(-1,3,96,96)/255
-        # gt,y = progress(gt),progress(y)
-        l = gt.shape[0]//(self.num-1)
-        return y[index%self.num*l : (index%self.num+1)*l ,:,:,:], gt[index%self.num*l : (index%self.num+1)*l ,:,:,:]
+        index = index%self.num
+        if gt.shape[0]% (self.num-1) == 0:
+            l = gt.shape[0]//(self.num)
+            return y[index*l : (index+1)*l ,:,:,:], gt[index*l : (index+1)*l ,:,:,:]
+        else:
+            l = gt.shape[0]//(self.num-1)
+            return y[index*l : (index+1)*l ,:,:,:], gt[index*l : (index+1)*l ,:,:,:]
     
 
 class Dataset_Rain200L(udata.Dataset):
@@ -258,22 +322,8 @@ class Dataset_X2(udata.Dataset):
         gt = cv2.imread(self.target_names+f'norain-{index+1}.png')
         y,gt = progress(y_origin),progress(gt)
         return y, gt
-class Dataset_OTS(udata.Dataset):
-    def __init__(self, data_path='.'):
-        super(Dataset_OTS, self).__init__()
-        self.data_path ='/home/huangjiehui/Project/DerainNet/JackData/OTS'
-        target_path = os.path.join(self.data_path, 'train_target_OTS.h5')
-        input_path = os.path.join(self.data_path, 'train_input_OTS.h5')
-        env1 = lmdb.open(target_path, map_size=int(1e11))
-        env2 = lmdb.open(input_path, map_size=int(1e11))
-        self.txn1 = env1.begin()
-        self.txn2 = env2.begin()
-    def __len__(self):
-        return 69543
-    def __getitem__(self, index):
-        target = pickle.loads(self.txn1.get(str(index).encode()))# 将数据转化为矩阵
-        input =  pickle.loads(self.txn2.get(str(index).encode()))
-        return torch.from_numpy(input), torch.from_numpy(target)
+
+    
 
 
 class Dataset_DID(udata.Dataset):
@@ -299,9 +349,9 @@ class Dataset_DID(udata.Dataset):
         return torch.Tensor(img[:,:,0:512]), torch.Tensor(img[:,:,512:1024])
     
 
-class Dataset_X2patch(udata.Dataset):
+class Dataset_X2patch_H(udata.Dataset):
     def __init__(self, data_path='/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/X2Data'):
-        super(Dataset_X2patch, self).__init__()
+        super(Dataset_X2patch_H, self).__init__()
         self.data_path = data_path
         self.target_names =  data_path+'/norain_H/'
         self.input_names =  data_path+'/rain_H/'
@@ -328,8 +378,6 @@ class Dataset_X2patch(udata.Dataset):
             return y[index*l : (index+1)*l ,:,:,:], gt[index.num*l : (index+1)*l ,:,:,:]
         else:
             l = gt.shape[0]//(self.num-1)
-            if index == (self.num-1):
-                index = 0
             return y[index*l : (index+1)*l ,:,:,:], gt[index*l : (index+1)*l ,:,:,:]
 
     
@@ -378,5 +426,5 @@ if __name__ == "__main__":
     # result = multi_cpu(prepare_ITS_Data, [0,2,4,6,8], 20, 1)
     # x = Dataset()
     # print(x.__getitem__(2))
-    x = Dataset_X2patch()
-    x.__getitem__(2)
+    # x = Dataset_X2patch()
+    # x.__getitem__(2)

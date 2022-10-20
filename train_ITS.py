@@ -1,14 +1,14 @@
 import os
 import argparse # (1)conda create -n JackPRENET=3.6
 import numpy as np # (2)pip install numpy
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3,4"
 parser = argparse.ArgumentParser(description="PReNet_train")
 parser.add_argument("--preprocess", type=bool, default=True, help='run prepare_data or not')
-parser.add_argument("--batch_size", type=int, default=22, help="Training batch size") # batch_size 设置为 18，游戏本顶不住，这里改为2
+parser.add_argument("--batch_size", type=int, default=1, help="Training batch size") # batch_size 设置为 18，游戏本顶不住，这里改为2
 parser.add_argument("--epochs", type=int, default=300, help="Number of training epochs") # 为了快速得到结果，减少epoch 100 变为 5
 parser.add_argument("--milestone", type=int, default=[30,50,80], help="When to decay learning rate")
 parser.add_argument("--lr", type=float, default=1e-3, help="initial learning rate")
-parser.add_argument("--save_path", type=str, default="/home/huangjiehui/Project/DerainNet/Logs/X2_H_patch", help='path to save models and log files')  # 3.28 BUG 防止add path时，斜杠不一致
+parser.add_argument("--save_path", type=str, default="/home/huangjiehui/Project/DerainNet/JackCode/Derain/Logs/ITS", help='path to save models and log files')  # 3.28 BUG 防止add path时，斜杠不一致
 parser.add_argument("--save_freq",type=int,default=1,help='save intermediate model')
 parser.add_argument("--Logsave_path",type=str, default="log1.txt",help='path to training data')  # 3.28 BUG 防止add path时，斜杠不一致
 # parser.add_argument("--data_path",type=str, default="/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain14000/Rain12600",help='path to training data')  # 4.25 训练100H目录下的雨条纹图像
@@ -55,7 +55,7 @@ def main():
 
     print('Loading dataset ...\n')
     
-    dataset_train = Dataset_X2patch()  # cuole 
+    dataset_train = Dataset_ITS_o()
     model = AMCC2(recurrent_iter=opt.recurrent_iter, use_GPU=opt.use_gpu).cuda()
     
     # loader_train = DataLoader(dataset=dataset_train, num_workers=16, batch_size=opt.batch_size, shuffle=True)
@@ -108,8 +108,6 @@ def main():
             # sum += batch_PSNR(input_train,target_train,1.0)
             # print(sum/(i+1))
             # continue
-            input_train = input_train.reshape(-1,3,96,96).type(torch.float32)
-            target_train = target_train.reshape(-1,3,96,96).type(torch.float32)
             model.train()  # nn.Module.train的继承
             model.zero_grad()
             optimizer.zero_grad()

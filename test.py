@@ -4,7 +4,7 @@ import os
 import argparse
 import glob
 import numpy as np
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import torch
 from torch.autograd import Variable
 from utils import *
@@ -173,7 +173,7 @@ def test(model,model_path,datapath,name_index):
         loader_train = DataLoader(dataset=dataset, num_workers=16, batch_size=1, shuffle=False)
         if opt.use_GPU:
             torch.cuda.synchronize()
-            
+        times = 0
         for out, gt in tqdm.tqdm(loader_train):
             out_o = out.cuda().type(torch.float32)
             gt = torch.squeeze(gt.cuda(),0).type(torch.float32)
@@ -182,8 +182,9 @@ def test(model,model_path,datapath,name_index):
             # torch.FloatTensor()
             # try:
             # out, _ = model(torch.squeeze(gt,0))
+            begin = time.time()
             out, _ = model(torch.squeeze(out_o,0))
-            
+            endtime = time.time()
             out = torch.clamp(out, 0., 1.)
             criterion = SSIM()
             loss = criterion(out, gt) * out.shape[0]
@@ -205,9 +206,11 @@ def test(model,model_path,datapath,name_index):
             # except:
             #     pass
             # break
+            times += (endtime - begin)
     psnst_average = psnr_test / count
     pixel_metric_average = pixel_metric / count
-    return psnst_average,psnr_max,pixel_metric_average,ssim_max
+    return psnst_average.item(),psnr_max.item(),pixel_metric_average.item(),ssim_max.item()
+    # return times/count 
 
 if __name__ == "__main__":
     
@@ -228,7 +231,11 @@ if __name__ == "__main__":
     path_did = '/home/huangjiehui/Project/DerainNet/JackCode/Derain/Logs/DID'
     path_did_patch = '/home/huangjiehui/Project/DerainNet/JackCode/Derain/Logs/DID_patch_192_L'
     path_14000_patch = '/home/huangjiehui/Project/DerainNet/JackCode/Derain/Logs/AM2_14000'
-    
+    path_DID_patch_192_L = '/home/huangjiehui/Project/DerainNet/JackCode/Derain/Logs/DID_patch_192_L'
+    path_200H_patch = '/home/huangjiehui/Project/DerainNet/Logs/200H_patch'
+    path_200H = '/home/huangjiehui/Project/DerainNet/JackCode/Derain/Logs/200H'
+    path_X2_H_patch ='/home/huangjiehui/Project/DerainNet/Logs/X2_H_patch_2'
+    path_OTS_o = "/home/huangjiehui/Project/DerainNet/JackCode/Derain/Logs/OTS"
     #  数据地址
     Rain_200H_data_path = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain200H/Rain200H/test'
     Rain_200L_data_path = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain/Rain200L/Rain200L/test'
@@ -240,27 +247,43 @@ if __name__ == "__main__":
     res = []
     count = 0
     net = '/data1/hjh/62190446236f408cbb1b3bb08c8b1241/JackFiles/ProjectData/RainData/DeRain'
-    
-    para = X2path
-    res += test(model,para,Dataset_Rain200(Rain_200H_data_path),count)
+    para = path_X2_H_patch
+    paras = [path_X2_H_patch,path_OTS_o,path_200H_patch]
+    datasets = [Dataset_Rain200(Rain_200L_data_path),Dataset_Rain200(Rain_200H_data_path)
+               ,Dataset_Rain200(Rain_100L_data_path),Dataset_Rain200(Rain_100H_data_path),
+               Dataset_DID_800(DID_data_path),Dataset_DID_800(data_path_800)]
+    for dataset in datasets:
+        for para in paras:
+            res += test(model,para,dataset,count)
+            print(res)
+        
+
+    # res += test(model,para,Dataset_Rain200(Rain_200L_data_path),count)
     # res += test(model,para,Dataset_DID_800(DID_data_path),count)
-    # # quit()
-    # count+=1
-    # print(res)
+    # # # # quit()
+    # # # count+=1
+    # # print(res)
     # res += test(model,para,Dataset_Rain200(Rain_200H_data_path),count)
-    # count+=1
-    # print(res)
+    # # # count+=1
+    # # print(res)
     # res += test(model,para,Dataset_DID_800(data_path_800),count)
-    # count+=1
-    # print(res)
+    # # # count+=1
+    # # print(res)
     # res += test(model,para,Dataset_Rain200(Rain_100L_data_path),count)
-    # count+=1
-    # print(res)
+    # # # count+=1
+    # # print(res)
     # res += test(model,para,Dataset_Rain200(Rain_100H_data_path),count)
-    # count+=1
+    # # count+=1
     # print(res)
     # res += test(model,para,Dataset_DID_800(DID_data_path),count)
-    print(res)
+    # print(res)
+    # print(test(model,para,Dataset_Rain200(Rain_200L_data_path),count))
+    # print(test(model,para,Dataset_Rain200(Rain_200H_data_path),count))
+    # print(test(model,para,Dataset_DID_800(data_path_800),count))
+    # print(test(model,para,Dataset_Rain200(Rain_100L_data_path),count))
+    # print(test(model,para,Dataset_Rain200(Rain_100H_data_path),count))
+    # test(model,para,Dataset_DID_800(DID_data_path),count)
+
     
     
     
